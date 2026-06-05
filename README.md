@@ -51,5 +51,6 @@ If you wish to run the full pipeline locally for development or evaluation:
 
 ### 1. Clone the Repository
 ```bash
-git clone [https://github.com/harshada8983/TrueLens.git](https://github.com/harshada8983/TrueLens.git)
+git clone https://github.com/harshada8983/TrueLens.git
 cd TrueLens
+```
