@@ -68,3 +68,33 @@ def analyze_image(file: UploadFile = File(...)):
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
         raise HTTPException(status_code=500, detail=f"Engine Error: {str(e)}")
+
+
+# --- VIDEO FEATURE: samples frames across the clip and reuses the same forensic pipeline ---
+@app.post("/predict-video")
+def analyze_video(file: UploadFile = File(...)):
+    if not file.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a video.")
+
+    temp_dir = tempfile.gettempdir()
+    # Keep the original extension so OpenCV's video backend can pick the right codec
+    _, ext = os.path.splitext(file.filename)
+    temp_file_path = os.path.join(temp_dir, f"truelens_upload_{os.getpid()}{ext or '.mp4'}")
+
+    try:
+        with open(temp_file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        result = predictor_engine.predict_video(temp_file_path)
+
+        os.remove(temp_file_path)
+
+        return result
+
+    except Exception as e:
+        print("\n[ SERVER CRASH TRACEBACK ]")
+        traceback.print_exc()
+
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        raise HTTPException(status_code=500, detail=f"Engine Error: {str(e)}")

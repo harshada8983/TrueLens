@@ -28,11 +28,26 @@ class FaceExtractor:
             # Get the bounding box of the most prominent face (the first one)
             bounding_box = results[0]['box']
             x, y, w, h = bounding_box
-            
+
+            # MARGIN FIX: MTCNN gives a very tight box (just eyes/nose/mouth/chin).
+            # The training dataset's images had a looser crop (forehead, hair, some
+            # shoulder). Without matching that framing, the model sees an unfamiliar
+            # zoom level at inference time and predictions become unreliable.
+            # Expand the box by ~35% on each side (a bit more on top for forehead/hair).
+            margin_x = int(w * 0.35)
+            margin_top = int(h * 0.45)
+            margin_bottom = int(h * 0.35)
+
+            img_h, img_w = img.shape[:2]
+            x1 = max(0, x - margin_x)
+            y1 = max(0, y - margin_top)
+            x2 = min(img_w, x + w + margin_x)
+            y2 = min(img_h, y + h + margin_bottom)
+
             # EDGE CASE 3: Face is cut off at the edge of the photo
-            x, y = max(0, x), max(0, y)
-            
-            face_crop = img[y:y+h, x:x+w]
+            x1, y1 = max(0, x1), max(0, y1)
+
+            face_crop = img[y1:y2, x1:x2]
             
             # EDGE CASE 4: Math error resulted in a 0-pixel crop
             if face_crop.size == 0:

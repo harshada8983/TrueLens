@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, ShieldCheck, AlertTriangle, Terminal, Image as ImageIcon, Loader2, Scan } from 'lucide-react';
+import { Upload, ShieldCheck, AlertTriangle, Terminal, Image as ImageIcon, Video as VideoIcon, Loader2, Scan } from 'lucide-react';
+
+// Configurable via .env (VITE_API_URL) so the frontend can point at a local
+// ngrok tunnel during development or a permanently deployed backend (e.g. Render) in production.
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://pry-mandarin-unsoiled.ngrok-free.dev';
 
 function App() {
   // --- Re-engineered Splash Screen Sequencer ---
@@ -9,6 +13,7 @@ function App() {
   const [loadingProgress, setLoadingProgress] = useState(0);
 
   // --- Core State ---
+  const [scanMode, setScanMode] = useState('image'); // 'image' | 'video'
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -53,6 +58,17 @@ function App() {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  const handleModeChange = (mode) => {
+    if (mode === scanMode) return;
+    setScanMode(mode);
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setResult(null);
+    setLogs([]);
+    setError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -69,18 +85,31 @@ function App() {
     setIsLoading(true);
     setError(null);
     setResult(null);
-    setLogs(["Initiating secure connection to TrueLens API...", "Uploading tensor payload..."]);
+
+    const isVideo = scanMode === 'video';
+    const endpoint = isVideo ? '/predict-video' : '/predict';
+    setLogs([
+      "Initiating secure connection to TrueLens API...",
+      isVideo ? "Uploading video payload..." : "Uploading tensor payload...",
+    ]);
 
     const formData = new FormData();
     formData.append('file', selectedFile);
 
     try {
-      const response = await axios.post('https://pry-mandarin-unsoiled.ngrok-free.dev/predict', formData, {
+      const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       const data = response.data;
       if (data.status === 'success') {
-        setResult({ prediction: data.prediction, confidence: data.confidence_percentage, raw: data.raw_score });
+        setResult({
+          prediction: data.prediction,
+          confidence: data.confidence_percentage,
+          raw: data.raw_score,
+          framesAnalyzed: data.frames_analyzed,
+          framesSkipped: data.frames_skipped,
+          manipulatedFrameRatio: data.manipulated_frame_ratio,
+        });
         setLogs(prev => [...prev, ...data.logs]);
       } else {
         setError(data.message || "An error occurred during analysis.");
@@ -141,7 +170,7 @@ function App() {
               <ShieldCheck className="text-blue-500" size={32} />
               TrueLens Engine
             </h1>
-            <p className="text-gray-400 mt-2 font-light text-base">Architected by Arya</p>
+            <p className="text-gray-400 mt-2 font-light text-base">Architected by Harshada</p>
           </div>
           <div className="hidden md:flex items-center gap-2.5 text-sm text-gray-400 bg-white/5 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 shadow-lg">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></div>
@@ -153,12 +182,39 @@ function App() {
 
           {/* Left Column: Upload */}
           <div className="lg:col-span-5 space-y-6 sticky top-10">
+
+            {/* Mode Toggle */}
+            <div className="flex bg-[#1a2235]/60 backdrop-blur-xl border border-white/10 rounded-xl p-1.5 gap-1.5">
+              <button
+                onClick={() => handleModeChange('image')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all duration-300 ${scanMode === 'image' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(79,70,229,0.4)]' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                <ImageIcon size={16} /> Image
+              </button>
+              <button
+                onClick={() => handleModeChange('video')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-all duration-300 ${scanMode === 'video' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(79,70,229,0.4)]' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                <VideoIcon size={16} /> Video
+              </button>
+            </div>
+
             <div onClick={() => fileInputRef.current?.click()} className="bg-[#1a2235]/60 backdrop-blur-xl border border-white/10 hover:border-blue-500/50 rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 group relative overflow-hidden shadow-2xl hover:shadow-[0_0_40px_rgba(59,130,246,0.15)] hover:-translate-y-1">
-              <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/jpeg, image/png" className="hidden" />
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept={scanMode === 'video' ? 'video/mp4, video/quicktime, video/webm' : 'image/jpeg, image/png'}
+                className="hidden"
+              />
 
               {previewUrl ? (
                 <div className="relative w-full aspect-square rounded-xl overflow-hidden border border-white/10 shadow-inner group-hover:border-blue-500/30 transition-all duration-300">
-                  <img src={previewUrl} alt="Target" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  {scanMode === 'video' ? (
+                    <video src={previewUrl} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                  ) : (
+                    <img src={previewUrl} alt="Target" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  )}
                   {isLoading && (
                     <>
                       <div className="absolute inset-0 bg-blue-950/40 backdrop-blur-[2px]"></div>
@@ -182,14 +238,20 @@ function App() {
                   <div>
                     <p className="text-gray-100 font-medium text-lg tracking-tight">Initialize Target Scan</p>
                     <p className="text-gray-500 text-sm mt-2">Drag & Drop or Click to Browse</p>
-                    <p className="text-gray-600 text-[11px] mt-1.5 font-mono">JPG, PNG / MAX 10MB</p>
+                    <p className="text-gray-600 text-[11px] mt-1.5 font-mono">
+                      {scanMode === 'video' ? 'MP4, MOV, WEBM / MAX 50MB' : 'JPG, PNG / MAX 10MB'}
+                    </p>
                   </div>
                 </div>
               )}
             </div>
 
             <button onClick={handleAnalyze} disabled={!selectedFile || isLoading} className={`w-full py-4 rounded-xl font-bold tracking-widest uppercase text-sm flex items-center justify-center gap-3 transition-all duration-300 ${!selectedFile ? 'bg-white/5 border border-white/10 text-gray-600 cursor-not-allowed' : isLoading ? 'bg-blue-600/50 text-blue-200 cursor-wait backdrop-blur-md border border-blue-500/30' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_0_30px_rgba(79,70,229,0.3)] hover:shadow-[0_0_40px_rgba(79,70,229,0.5)] border border-blue-400/30'}`}>
-              {isLoading ? <><Loader2 className="animate-spin" size={18} /> Neural Inference Active...</> : <><ImageIcon size={18} /> Execute Scan Pipeline</>}
+              {isLoading ? (
+                <><Loader2 className="animate-spin" size={18} /> {scanMode === 'video' ? 'Sampling & Analyzing Frames...' : 'Neural Inference Active...'}</>
+              ) : (
+                <>{scanMode === 'video' ? <VideoIcon size={18} /> : <ImageIcon size={18} />} Execute Scan Pipeline</>
+              )}
             </button>
           </div>
 
@@ -224,31 +286,41 @@ function App() {
               )}
 
               {result && (
-                <div className="flex items-center justify-between z-10 transition-opacity duration-500">
-                  <div className="flex items-center gap-5">
-                    {result.prediction === 'REAL' ? (
-                      <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
-                        <ShieldCheck className="text-emerald-400 drop-shadow-md" size={48} />
+                <div className="z-10 transition-opacity duration-500">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-5">
+                      {result.prediction === 'REAL' ? (
+                        <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+                          <ShieldCheck className="text-emerald-400 drop-shadow-md" size={48} />
+                        </div>
+                      ) : (
+                        <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+                          <AlertTriangle className="text-red-400 drop-shadow-md" size={48} />
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-widest mb-1 font-semibold">Final Verdict</p>
+                        <h2 className={`text-4xl font-black tracking-tight drop-shadow-lg ${result.prediction === 'REAL' ? 'text-emerald-400' : 'text-red-500'}`}>
+                          {result.prediction}
+                        </h2>
                       </div>
-                    ) : (
-                      <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
-                        <AlertTriangle className="text-red-400 drop-shadow-md" size={48} />
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-widest mb-1 font-semibold">Final Verdict</p>
-                      <h2 className={`text-4xl font-black tracking-tight drop-shadow-lg ${result.prediction === 'REAL' ? 'text-emerald-400' : 'text-red-500'}`}>
-                        {result.prediction}
-                      </h2>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400 uppercase tracking-widest mb-1 font-semibold">Confidence</p>
+                      <p className="text-4xl font-light text-white tracking-tight">
+                        {result.confidence}<span className="text-xl text-gray-500 font-normal">%</span>
+                      </p>
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400 uppercase tracking-widest mb-1 font-semibold">Confidence</p>
-                    <p className="text-4xl font-light text-white tracking-tight">
-                      {result.confidence}<span className="text-xl text-gray-500 font-normal">%</span>
-                    </p>
-                  </div>
+                  {typeof result.framesAnalyzed === 'number' && (
+                    <div className="mt-5 pt-4 border-t border-white/10 flex items-center gap-6 text-xs text-gray-400 font-mono">
+                      <span>Frames analyzed: <span className="text-gray-200">{result.framesAnalyzed}</span></span>
+                      <span>Frames skipped: <span className="text-gray-200">{result.framesSkipped}</span></span>
+                      <span>Flagged ratio: <span className="text-gray-200">{Math.round((result.manipulatedFrameRatio || 0) * 100)}%</span></span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
