@@ -1,6 +1,5 @@
-# =========================
 # Machine Learning & Data
-# =========================
+
 # Ignore your uncropped image datasets
 backend/data/
 *.zip
@@ -12,11 +11,10 @@ backend/models/
 *.pth
 *.pt
 *.h5
-*.keras
+#*.keras
 
-# =========================
 # Python & FastAPI (Backend)
-# =========================
+
 __pycache__/
 *.py[cod]
 *$py.class
@@ -24,16 +22,15 @@ venv/
 env/
 .env
 
-# =========================
 # React & Node (Frontend)
-# =========================
+
 frontend/node_modules/
 frontend/build/
 frontend/dist/
 .npm
 
-# =========================
+
 # OS Generated Files
-# =========================
+
 .DS_Store
 Thumbs.db
