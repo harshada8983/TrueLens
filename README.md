@@ -54,6 +54,10 @@ This makes TrueLens usable for both static images and short video clips, without
 
 * Usage: Simply toggle between "Image" and "Video" mode on the upload screen before selecting a file.
 
+## 🎬 Demo
+
+![TrueLens Demo](./assets/demo.gif)
+
 ---
 
 ## 🚀 Local Setup & Installation
